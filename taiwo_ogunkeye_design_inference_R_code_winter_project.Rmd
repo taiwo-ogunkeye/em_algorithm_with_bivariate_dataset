@@ -1,0 +1,182 @@
+---
+title: "12th_april_design_inference_winter_project"
+author: "Taiwo Ogunkeye"
+date: "2025-04-12"
+output: pdf_document
+---
+
+
+
+
+
+```{r}
+# loading libraries
+library(mvtnorm)
+library(ggplot2)
+library(dplyr)
+library(MASS)
+
+# Load data with proper column names and whitespace handling
+df <- read.table(
+  file = "interexp.dat",
+  header = TRUE,
+  na.strings = c("NA", ""),
+  col.names = c("yA", "yB"),  # Explicitly set column names
+  strip.white = TRUE,         # Remove extra whitespace
+  sep = ""                    # Any whitespace separator
+)
+
+# Check column names
+cat("Column names:", colnames(df), "\n")
+
+# Check first 6 rows
+cat("\nFirst 6 rows:\n")
+print(head(df))
+
+# Check missing values
+cat("\nMissing values per column:\n")
+print(colSums(is.na(df)))
+
+
+
+# EM Imputation Function that uses bivariate normal data
+em_imputation <- function(data, max_iter = 500, tol = 1e-8) {
+    
+    imputed <- data.frame(
+        yA = ifelse(is.na(data$yA), 
+                   median(data$yA, na.rm = TRUE),  # More robust initialization
+                   data$yA),
+        yB = ifelse(is.na(data$yB),
+                   median(data$yB, na.rm = TRUE),
+                   data$yB)
+    )
+    
+    # Convert to matrix for numerical stability
+    imputed_mat <- as.matrix(imputed)
+    n <- nrow(imputed_mat)
+    mu <- colMeans(imputed_mat)
+    cov_mat <- cov(imputed_mat)
+    
+    # create initial covariance regularization
+    cov_mat <- cov_mat + diag(1e-5, ncol(cov_mat))
+    
+    for (i in 1:max_iter) {
+        sum_z <- matrix(0, 2, 1)
+        sum_zz <- matrix(0, 2, 2)
+        
+        for (j in 1:n) {
+            obs <- !is.na(data[j, ])
+            miss <- is.na(data[j, ])
+            
+            if(any(miss)) {
+                
+                cov_sub <- cov_mat[obs, obs, drop = FALSE]
+                cov_sub_reg <- cov_sub + diag(1e-6, nrow(cov_sub))
+                cov_inv <- ginv(cov_sub_reg)
+                
+                #conditional mean calculation
+                mu_cond <- mu[miss] + 
+                    (cov_mat[miss, obs, drop = FALSE] %*% cov_inv) %*% 
+                    (imputed_mat[j, obs] - mu[obs])
+                
+                # Updating the imputation
+                imputed_mat[j, miss] <- mu_cond
+            }
+            
+            # collect the statistics by using the updated imputation
+            z <- matrix(imputed_mat[j, ], ncol = 1)
+            sum_z <- sum_z + z
+            sum_zz <- sum_zz + tcrossprod(z)
+        }
+        
+        # updating the parameters mu and covariance
+        new_mu <- sum_z/n
+        new_cov <- (sum_zz/n) - tcrossprod(new_mu)
+        cov_mat <- new_cov + diag(1e-5, 2)  
+        
+        # Checking the convergence condition
+        if (i > 1 && norm(mu - new_mu, "F") < tol) break
+        mu <- new_mu
+    }
+    
+    list(
+        imputed_data = data.frame(imputed_mat),
+        mu = mu,
+        sigma = cov_mat,
+        iterations = i
+    )
+}
+
+
+# running the imputation above
+set.seed(42)  # For reproducibility
+result <- em_imputation(df)
+df_imputed <- result$imputed_data
+
+# creating file called imputed.csv
+write.csv(df_imputed, "imputed_data.csv", row.names = FALSE)
+
+# printing the pre-imputation statistics
+cat("Pre-imputation summary:\n")
+print(summary(df))
+
+#printing the post imputation statistics
+cat("\nPost-imputation summary:\n")
+print(summary(df_imputed))
+
+
+# Plotting the distributions in individual density plots
+plot_distribution_single <- function(var, dataset, title_text, fill_color) {
+    ggplot() +
+        geom_histogram(
+            data = dataset, aes(x = !!sym(var), y = ..density..),
+            bins = 15, fill = fill_color, alpha = 0.5
+        ) +
+        geom_density(data = dataset, aes(x = !!sym(var)), color = fill_color) +
+        ggtitle(title_text) +
+        theme_minimal()
+}
+
+# Plotting the distributions in the same plot to check the visual changes
+plot_distribution_combined <- function(var) {
+    ggplot() +
+        geom_histogram(
+            data = df, aes(x = !!sym(var), y = ..density..),
+            bins = 15, fill = "blue", alpha = 0.3
+        ) +
+        geom_histogram(
+            data = df_imputed, aes(x = !!sym(var), y = ..density..),
+            bins = 15, fill = "red", alpha = 0.3
+        ) +
+        geom_density(data = df, aes(x = !!sym(var)), color = "blue") +
+        geom_density(data = df_imputed, aes(x = !!sym(var)), color = "red") +
+        ggtitle(paste("Distribution of", var, "(Combined)")) +
+        theme_minimal()
+}
+
+
+plot_distribution_single("yA", df, "yA Before Imputation", "blue")
+plot_distribution_single("yA", df_imputed, "yA After Imputation", "red")
+plot_distribution_single("yB", df, "yB Before Imputation", "blue")
+plot_distribution_single("yB", df_imputed, "yB After Imputation", "red")
+plot_distribution_combined("yA")  
+plot_distribution_combined("yB")
+
+
+
+# Covariance comparison
+cat("\nOriginal covariance (complete cases):\n")
+print(cov(df, use = "complete.obs"))
+
+cat("\nImputed covariance:\n")
+print(cov(df_imputed))
+
+# Statistical test
+cat("\nPaired t-test results:\n")
+print(t.test(df_imputed$yA, df_imputed$yB, paired = TRUE))
+
+
+```
+
+```
+
