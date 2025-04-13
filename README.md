@@ -15,12 +15,12 @@ This project implements the **Expectation-Maximization (EM) algorithm** to imput
 ---
 
 ## **File Structure**  
-project-root/
-├── imputed_data.csv # Imputed dataset (output)
-├── interexp.dat # Original datase
-├── knitted_Rcode_taiwo_ogunkeye__design_inference_winter_project.pdf
-├── taiwo_ogunkeye_design_inference_R_code_winter_project.pdf
-└── README.md # This file
+
+- imputed_data.csv # Imputed dataset (output)
+- interexp.dat # Original data file
+- knitted_Rcode_taiwo_ogunkeye__design_inference_winter_project.pdf # this is the knitted output of the R code
+- taiwo_ogunkeye_design_inference_R_code_winter_project.rmd # this is the actual R code of the project
+- README.md # This file
 
 
 ---
